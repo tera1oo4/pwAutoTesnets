@@ -1,0 +1,35 @@
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pw-autotestnets-app
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+    # Playwright requires a larger shared memory size to avoid crashes
+    shm_size: '2gb'
+    # Optional: Enable defining custom seccomp profile or IPC for better browser isolation if needed
+    # ipc: host
+
+  redis:
+    image: redis:7-alpine
+    container_name: pw-autotestnets-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+volumes:
+  redis_data:

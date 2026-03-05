@@ -1,0 +1,33 @@
+{
+  "name": "pw-auto-testnets",
+  "version": "1.0.0",
+  "description": "Production hardening for browser automation and testnets",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "worker": "tsx src/core/worker/Worker.ts",
+    "dashboard": "tsx src/dashboard/index.ts",
+    "test": "node --loader tsx --test tests/**/*.test.ts",
+    "lint": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "ioredis": "^5.3.2",
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5",
+    "zod": "^3.22.4",
+    "eventsource": "^2.0.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.5",
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "tsx": "^4.7.0",
+    "nodemon": "^3.0.2",
+    "@playwright/test": "^1.40.0"
+  }
+}

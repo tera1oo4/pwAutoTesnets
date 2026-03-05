@@ -1,0 +1,23 @@
+{
+  "app": "pwAutoTestnets",
+  "layers": {
+    "core": ["browser", "locks"],
+    "shared": ["types", "constants"],
+    "data": ["database/schema.sql"]
+  },
+  "flows": [
+    {
+      "name": "browser_session",
+      "steps": [
+        "acquire_profile_lock",
+        "launch_driver_session",
+        "record_session_metadata",
+        "release_profile_lock"
+      ]
+    }
+  ],
+  "storage": {
+    "database": "sqlite",
+    "schema": "/Users/tera/code/pwAutoTestnets/database/schema.sql"
+  }
+}

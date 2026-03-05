@@ -1,0 +1,5 @@
+1. Установить Node.js v24+
+2. Заполнить .env по примеру .env.example
+3. Генерировать seed SQL: node --experimental-strip-types scripts/seed.ts > database/seed.sql
+4. Прогнать unit tests: node --test --experimental-strip-types tests/*.test.ts
+5. Запуск воркера и планировщика выполняется через собственный bootstrap (не включен)

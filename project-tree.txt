@@ -1,0 +1,13 @@
+/Users/tera/code/pwAutoTestnets
+├── architecture
+│   └── overview.json
+├── database
+│   └── schema.sql
+└── src
+    ├── core
+    │   └── browser
+    │       ├── BrowserManager.ts
+    │       └── ProfileLock.ts
+    └── shared
+        ├── constants.ts
+        └── types.ts
