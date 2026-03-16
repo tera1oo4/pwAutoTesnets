@@ -103,39 +103,48 @@ export class Worker {
     try {
       page = await this.pageFactory.create(run.profileId);
     } catch (error) {
-      const classified = classifyError(error);
-      if (classified.category === "needs_review") {
-        await this.store.markNeedsReview(run.id, classified.message, undefined, classified.code);
-        this.logger.info(WORKER_LOG_EVENTS.needsReview, "worker run needs review", {
-          runId: run.id,
-          attempt: scenarioRun.attempt,
-          error: classified.message,
-          code: classified.code
-        });
-      } else if (classified.category === "transient" && scenarioRun.attempt < run.maxAttempts) {
-        const delayMs = computeRetryDelayMs(scenarioRun.attempt);
-        await this.store.markQueued(
-          run.id,
-          classified.message,
-          undefined,
-          new Date(Date.now() + delayMs).toISOString(),
-          classified.code
-        );
-        this.logger.info(WORKER_LOG_EVENTS.retryScheduled, "worker retry scheduled", {
-          runId: run.id,
-          nextAttempt: scenarioRun.attempt + 1,
-          delayMs
-        });
-      } else {
-        await this.store.markFailed(run.id, classified.message);
-        this.logger.error(WORKER_LOG_EVENTS.runFailure, "worker run failure", {
-          runId: run.id,
-          attempt: scenarioRun.attempt,
-          error: classified.message,
-          code: classified.code
-        });
+      try {
+        const classified = classifyError(error);
+        if (classified.category === "needs_review") {
+          await this.store.markNeedsReview(run.id, classified.message, undefined, classified.code);
+          this.logger.info(WORKER_LOG_EVENTS.needsReview, "worker run needs review", {
+            runId: run.id,
+            attempt: scenarioRun.attempt,
+            error: classified.message,
+            code: classified.code
+          });
+        } else if (classified.category === "transient" && scenarioRun.attempt < run.maxAttempts) {
+          const delayMs = computeRetryDelayMs(scenarioRun.attempt);
+          await this.store.markQueued(
+            run.id,
+            classified.message,
+            undefined,
+            new Date(Date.now() + delayMs).toISOString(),
+            classified.code
+          );
+          this.logger.info(WORKER_LOG_EVENTS.retryScheduled, "worker retry scheduled", {
+            runId: run.id,
+            nextAttempt: scenarioRun.attempt + 1,
+            delayMs
+          });
+        } else {
+          await this.store.markFailed(run.id, classified.message);
+          this.logger.error(WORKER_LOG_EVENTS.runFailure, "worker run failure", {
+            runId: run.id,
+            attempt: scenarioRun.attempt,
+            error: classified.message,
+            code: classified.code
+          });
+        }
+        await this.queue.ack(item.id);
+      } finally {
+        // Cleanup on page creation error
+        if (page) {
+          await this.pageFactory.close(run.profileId).catch(() => {
+            // Ignore cleanup errors
+          });
+        }
       }
-      await this.queue.ack(item.id);
       return true;
     }
 

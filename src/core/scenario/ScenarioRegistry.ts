@@ -11,6 +11,10 @@ export class ScenarioRegistry {
     this.scenarios.set(scenario.id, scenario);
   }
 
+  has(id: ScenarioId): boolean {
+    return this.scenarios.has(id);
+  }
+
   get(id: ScenarioId): Scenario {
     const scenario = this.scenarios.get(id);
     if (!scenario) {

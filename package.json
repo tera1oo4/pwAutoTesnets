@@ -1,42 +1,47 @@
 {
   "name": "pw-auto-testnets",
   "version": "1.0.0",
-  "description": "Production hardening for browser automation and testnets",
+  "description": "Browser automation and testnet testing with Playwright",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
     "dev": "tsx src/index.ts",
-    "worker": "tsx src/core/worker/Worker.ts",
+    "test:server": "tsx test-server.ts",
     "test": "node --import tsx --test tests/**/*.test.ts",
-    "lint": "tsc --noEmit",
     "build": "tsc",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "headful": "tsx src/headful-runner.ts",
+    "headful:connect": "tsx src/headful-runner.ts connect_wallet",
+    "headful:swap": "tsx src/headful-runner.ts token_swap",
+    "headful:sign": "tsx src/headful-runner.ts sign_message",
+    "headful:network": "tsx src/headful-runner.ts switch_network",
     "start": "docker compose up -d && docker compose logs -f",
-    "start:build": "docker compose build --no-cache && docker compose up -d && docker compose logs -f",
-    "stop": "docker compose down",
-    "logs": "docker compose logs -f",
-    "ps": "docker compose ps",
-    "shell:api": "docker compose exec api sh",
-    "shell:worker": "docker compose exec worker sh",
-    "shell:postgres": "docker compose exec postgres psql -U user -d playwrightautomation",
-    "shell:redis": "docker compose exec redis redis-cli"
+    "stop": "docker compose down"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "eventsource": "^2.0.2",
     "express": "^4.18.2",
     "ioredis": "^5.3.2",
     "pg": "^8.20.0",
     "playwright": "^1.40.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.0.1",
     "@playwright/test": "^1.40.0",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^20.10.5",
     "@types/pg": "^8.18.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.56.0",
+    "eslint-import-resolver-typescript": "^3.6.1",
+    "eslint-plugin-import": "^2.29.1",
     "nodemon": "^3.0.2",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }
 }
+

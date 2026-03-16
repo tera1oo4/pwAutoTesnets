@@ -1,14 +1,21 @@
 import "dotenv/config";
 import { initializeApp, startWorkerLoop, startSchedulerLoop } from "./main";
 import { createHttpServer } from "./api/server";
+import { createConsoleLogger } from "./shared/logger";
+import { SCHEDULER_POLL_INTERVAL_MS } from "./shared/constants";
+
+const logger = createConsoleLogger({ context: { module: "startup" } });
 
 async function main() {
   try {
-    console.log("🚀 Starting PlaywrightAutomation application...\n");
+    logger.info("app_startup", "Starting PlaywrightAutomation application", {});
 
     // Initialize all services
     const services = await initializeApp();
-    const app = { ...services, artifactsPath: process.env.ARTIFACTS_PATH || "./artifacts" };
+    const app = {
+      ...services,
+      artifactsPath: process.env.ARTIFACTS_PATH || "./artifacts"
+    };
 
     // Create HTTP server
     const server = createHttpServer(app);
@@ -16,22 +23,17 @@ async function main() {
     // Start server
     const port = process.env.APP_PORT || 3000;
     const httpServer = server.listen(port, () => {
-      console.log(`✓ HTTP Server listening on http://localhost:${port}`);
-      console.log(`✓ Available scenarios:`);
-      console.log(`  - connect_wallet: Detect and connect MetaMask`);
-      console.log(`  - connect_and_sign_message: Sign test message`);
-      console.log(`  - approve_token: Simulate Uniswap token swap\n`);
-      console.log(`API endpoints:`);
-      console.log(`  GET  http://localhost:${port}/api/runs`);
-      console.log(`  POST http://localhost:${port}/api/runs`);
-      console.log(`  GET  http://localhost:${port}/api/runs/:id\n`);
+      logger.info("http_server_started", `HTTP Server listening on http://localhost:${port}`, {
+        port: Number(port),
+        availableScenarios: ["connect_wallet", "connect_and_sign_message", "approve_token"]
+      });
     });
 
     const abortController = new AbortController();
 
     // Start background loops
     void startWorkerLoop(services.worker, services.logger, abortController.signal);
-    startSchedulerLoop(services.scheduler, services.logger, 15000, abortController.signal);
+    startSchedulerLoop(services.scheduler, services.logger, SCHEDULER_POLL_INTERVAL_MS, abortController.signal);
 
     const shutdown = async () => {
       services.logger.info("shutdown_initiated", "Shutting down application", {});
@@ -42,7 +44,11 @@ async function main() {
         await (services.runStore as any).close();
       }
       if (typeof services.redis?.quit === "function") {
-        await services.redis.quit().catch(console.error);
+        await services.redis.quit().catch((err) => {
+          services.logger.error("redis_quit_failed", "Failed to close Redis connection", {
+            error: String(err)
+          });
+        });
       }
       
       process.exit(0);
@@ -51,7 +57,9 @@ async function main() {
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
   } catch (error) {
-    console.error("❌ Failed to start application:", error);
+    logger.error("app_startup_failed", "Failed to start application", {
+      error: String(error)
+    });
     process.exit(1);
   }
 }

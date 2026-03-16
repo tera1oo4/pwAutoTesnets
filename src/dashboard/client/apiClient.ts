@@ -40,6 +40,54 @@ export type RunsQuery = {
 };
 
 /**
+ * Browser control types
+ */
+export type BrowserSessionInfo = {
+  runId: string;
+  isActive: boolean;
+  commandCount: number;
+  resultCount: number;
+  lastActivity: string;
+  pageAvailable: boolean;
+};
+
+export type BrowserCommand = {
+  type: string;
+  [key: string]: any;
+};
+
+export type BrowserCommandResult = {
+  success: boolean;
+  timestamp: string;
+  command: BrowserCommand;
+  result?: any;
+  error?: string;
+};
+
+export type BrowserSessionsResponse = {
+  sessions: BrowserSessionInfo[];
+  count: number;
+  timestamp: string;
+};
+
+export type BrowserSessionResponse = {
+  session: BrowserSessionInfo;
+  timestamp: string;
+};
+
+export type BrowserCommandResultResponse = {
+  result: BrowserCommandResult;
+  timestamp: string;
+};
+
+export type BrowserCommandHistoryResponse = {
+  history: BrowserCommandResult[];
+  count: number;
+  total: number;
+  timestamp: string;
+};
+
+/**
  * Dashboard API Client
  * Type-safe HTTP client for backend API
  */
@@ -117,6 +165,74 @@ export class DashboardApiClient {
     const response = await fetch(url.toString());
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
+    return response.json();
+  }
+
+  // ===== Browser Control Methods =====
+
+  /**
+   * Create a new browser session for a run
+   */
+  async createBrowserSession(runId: string): Promise<BrowserSessionResponse> {
+    const response = await fetch(`${this.baseUrl}/api/browser/sessions/${runId}/create`, {
+      method: "POST"
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    return response.json();
+  }
+
+  /**
+   * Get browser session details
+   */
+  async getBrowserSession(runId: string): Promise<BrowserSessionResponse | null> {
+    const response = await fetch(`${this.baseUrl}/api/browser/sessions/${runId}`);
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    return response.json();
+  }
+
+  /**
+   * List all active browser sessions
+   */
+  async listBrowserSessions(): Promise<BrowserSessionsResponse> {
+    const response = await fetch(`${this.baseUrl}/api/browser/sessions`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    return response.json();
+  }
+
+  /**
+   * Execute a command in a browser session
+   */
+  async executeBrowserCommand(runId: string, command: BrowserCommand): Promise<BrowserCommandResultResponse> {
+    const response = await fetch(`${this.baseUrl}/api/browser/sessions/${runId}/command`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(command)
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    return response.json();
+  }
+
+  /**
+   * Get command history for a session
+   */
+  async getBrowserCommandHistory(runId: string, limit?: number): Promise<BrowserCommandHistoryResponse> {
+    const url = new URL(`${this.baseUrl}/api/browser/sessions/${runId}/history`);
+    if (limit) url.searchParams.set("limit", String(limit));
+
+    const response = await fetch(url.toString());
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    return response.json();
+  }
+
+  /**
+   * End a browser session
+   */
+  async endBrowserSession(runId: string): Promise<{ message: string; runId: string; timestamp: string }> {
+    const response = await fetch(`${this.baseUrl}/api/browser/sessions/${runId}/end`, {
+      method: "POST"
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     return response.json();
   }
 }

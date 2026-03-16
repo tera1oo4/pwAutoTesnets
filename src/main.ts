@@ -1,6 +1,6 @@
 import { createRedisClient } from "./config/redis";
 import { createConsoleLogger } from "./shared/logger";
-import { loadEnv } from "./config/env";
+import { loadEnv, validateEnv } from "./config/env";
 import { PostgresRunStore } from "./core/store/PostgresRunStore";
 import { RedisQueue } from "./core/queue/RedisQueue";
 import { ProfileLock } from "./core/browser/ProfileLock";
@@ -16,13 +16,14 @@ import { SignMessageScenario } from "./core/scenario/scenarios/SignMessageScenar
 import { TokenSwapScenario } from "./core/scenario/scenarios/TokenSwapScenario";
 import { SwitchNetworkIfNeededScenario } from "./core/scenario/scenarios/SwitchNetworkScenario";
 import { GenericTransactionFlowScenario } from "./core/scenario/scenarios/GenericTransactionScenario";
-import type { Logger, BrowserProfile } from "./shared/types";
+import { SCHEDULER_BATCH_SIZE, SCHEDULER_POLL_INTERVAL_MS } from "./shared/constants";
+import type { Logger, BrowserProfile, Queue, RunQueuePayload, RedisQueueClient } from "./shared/types";
 
 export type AppServices = {
   logger: Logger;
   runStore: PostgresRunStore;
-  queue: any;
-  redis: any;
+  queue: Queue<RunQueuePayload>;
+  redis: RedisQueueClient;
   browserManager: BrowserManager;
   scenarioEngine: ScenarioEngine;
   scheduler: Scheduler;
@@ -34,6 +35,9 @@ export async function initializeApp(config?: Partial<{ databaseUrl: string; redi
   const env = loadEnv(process.env);
   const finalConfig = { ...env, ...config };
 
+  // Validate environment
+  await validateEnv(finalConfig);
+
   // Logger
   const logger = createConsoleLogger({ context: { app: "PlaywrightAutomation" } });
 
@@ -44,9 +48,9 @@ export async function initializeApp(config?: Partial<{ databaseUrl: string; redi
   });
 
   // Infrastructure
-  let redis: any;
+  let redis: RedisQueueClient;
   try {
-    redis = createRedisClient(finalConfig.redisUrl);
+    redis = createRedisClient(finalConfig.redisUrl) as RedisQueueClient;
     logger.debug("redis_connected", "Connected to Redis", {});
   } catch (error) {
     logger.error("redis_connection_failed", "Failed to connect to Redis", {
@@ -69,7 +73,7 @@ export async function initializeApp(config?: Partial<{ databaseUrl: string; redi
   }
 
   // Queue
-  const queue = new RedisQueue({ client: redis, logger }) as any;
+  const queue = new RedisQueue({ client: redis, logger });
   logger.debug("queue_initialized", "Redis queue initialized", {});
 
   // Browser infrastructure
@@ -157,11 +161,11 @@ export async function initializeApp(config?: Partial<{ databaseUrl: string; redi
   const scheduler = new Scheduler({
     store: runStore,
     queue: queue as any,
-    batchSize: 10,
+    batchSize: SCHEDULER_BATCH_SIZE,
     logger
   });
   logger.debug("scheduler_initialized", "Scheduler initialized", {
-    batchSize: 10
+    batchSize: SCHEDULER_BATCH_SIZE
   });
 
   logger.info("app_init_complete", "Application initialized successfully", {

@@ -36,6 +36,18 @@ export const DEFAULT_QUEUE_POLL_INTERVAL_MS = 200;
 export const DEFAULT_RETRY_DELAY_MS = 1500;
 export const DEFAULT_ARTIFACTS_DIR = ".pwAutoTestnets/artifacts";
 
+// Scheduler configuration
+export const SCHEDULER_BATCH_SIZE = 10;
+export const SCHEDULER_POLL_INTERVAL_MS = 15000;
+
+// Scenario execution timeouts
+export const SCENARIO_EXECUTION_TIMEOUT_MS = 30000;
+export const SCENARIO_STEP_TIMEOUT_MS = 10000;
+
+// API configuration
+export const RATE_LIMIT_WINDOW_MS = 60000;
+export const RATE_LIMIT_MAX_REQUESTS = 100;
+
 export const SCENARIO_LOG_EVENTS = {
   start: "scenario.start",
   success: "scenario.success",

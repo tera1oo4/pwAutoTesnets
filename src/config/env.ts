@@ -1,4 +1,6 @@
 import { LogLevel } from "../shared/types";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 export type AppEnv = {
   port: number;
@@ -43,6 +45,49 @@ export const loadEnv = (env: Record<string, string | undefined>): AppEnv => {
     metamaskExtensionPath,
     rabbyExtensionPath
   };
+};
+
+export const validateEnv = async (config: AppEnv): Promise<void> => {
+  const errors: string[] = [];
+
+  // Validate extension paths if provided
+  if (config.metamaskExtensionPath) {
+    try {
+      const stat = await fs.stat(config.metamaskExtensionPath);
+      if (!stat.isDirectory()) {
+        errors.push(`METAMASK_EXTENSION_PATH must be a directory: ${config.metamaskExtensionPath}`);
+      }
+      const manifestPath = path.join(config.metamaskExtensionPath, "manifest.json");
+      try {
+        await fs.access(manifestPath);
+      } catch {
+        errors.push(`manifest.json not found in METAMASK_EXTENSION_PATH: ${config.metamaskExtensionPath}`);
+      }
+    } catch {
+      errors.push(`METAMASK_EXTENSION_PATH does not exist: ${config.metamaskExtensionPath}`);
+    }
+  }
+
+  if (config.rabbyExtensionPath) {
+    try {
+      const stat = await fs.stat(config.rabbyExtensionPath);
+      if (!stat.isDirectory()) {
+        errors.push(`RABBY_EXTENSION_PATH must be a directory: ${config.rabbyExtensionPath}`);
+      }
+      const manifestPath = path.join(config.rabbyExtensionPath, "manifest.json");
+      try {
+        await fs.access(manifestPath);
+      } catch {
+        errors.push(`manifest.json not found in RABBY_EXTENSION_PATH: ${config.rabbyExtensionPath}`);
+      }
+    } catch {
+      errors.push(`RABBY_EXTENSION_PATH does not exist: ${config.rabbyExtensionPath}`);
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Environment validation failed:\n${errors.join("\n")}`);
+  }
 };
 
 const parseNumber = (value: string | undefined, fallback: number) => {

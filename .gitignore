@@ -33,3 +33,5 @@ src/test_split.ts
 # IDE
 .vscode/
 .idea/
+
+*.md

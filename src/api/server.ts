@@ -4,17 +4,21 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Logger, RunRecord, RunStatus } from "../shared/types.ts";
 import type { RunRepository } from "../data/repositories/RunRepository.ts";
+import type { ScenarioEngine } from "../core/scenario/ScenarioEngine.ts";
 import { RunService } from "./services/RunService.ts";
 import { ArtifactsService } from "./services/ArtifactsService.ts";
+import { BrowserControlService } from "./services/BrowserControlService.ts";
 import { DashboardApiClient } from "../dashboard/client/apiClient.ts";
 import { DashboardRunService } from "../dashboard/services/runService.ts";
 import { buildRunsPage, renderRunsPageHtml } from "../dashboard/pages/RunsPage.ts";
 import { buildRunDetailPage, renderRunDetailPageHtml } from "../dashboard/pages/RunDetailPage.ts";
+import { buildBrowserControlPage, renderBrowserControlPageHtml } from "../dashboard/pages/BrowserControlPage.ts";
 
 interface HttpServerOptions {
   logger: Logger;
   runStore: RunRepository;
   artifactsPath: string;
+  scenarioEngine: ScenarioEngine;
   port?: number;
 }
 
@@ -23,7 +27,7 @@ interface HttpServerOptions {
  * Replaces custom Router with standard Express routing
  */
 export function createHttpServer(options: HttpServerOptions): Express {
-  const { logger, runStore, artifactsPath, port = 3000 } = options;
+  const { logger, runStore, artifactsPath, scenarioEngine, port = 3000 } = options;
 
   const app = express();
 
@@ -44,6 +48,7 @@ export function createHttpServer(options: HttpServerOptions): Express {
   // Services
   const runService = new RunService(runStore);
   const artifactsService = new ArtifactsService({ baseDir: artifactsPath });
+  const browserControlService = new BrowserControlService(logger);
 
   // Dashboard Helpers
   const apiClient = new DashboardApiClient(`http://localhost:${port}`);
@@ -146,7 +151,10 @@ export function createHttpServer(options: HttpServerOptions): Express {
     <div class="container">
         <header>
             <h1>pwAutoTestnets</h1>
-            <nav><a href="/" class="dashboard-link">Dashboard</a></nav>
+            <nav>
+              <a href="/" class="dashboard-link">Dashboard</a> | 
+              <a href="/browser-control" class="dashboard-link">Browser Control</a>
+            </nav>
         </header>
         <main>${content}</main>
     </div>
@@ -167,6 +175,12 @@ export function createHttpServer(options: HttpServerOptions): Express {
     const pageData = await buildRunDetailPage(dashboardService, apiClient, id);
     const htmlSnippet = renderRunDetailPageHtml(pageData);
     res.send(wrapHtml(htmlSnippet, `Run ${id.slice(0, 8)}`));
+  });
+
+  app.get("/browser-control", async (req: Request, res: Response) => {
+    const pageData = await buildBrowserControlPage(apiClient);
+    const htmlSnippet = renderBrowserControlPageHtml(pageData);
+    res.send(wrapHtml(htmlSnippet, "Browser Control"));
   });
 
   // ===== Health Endpoint =====
@@ -248,6 +262,15 @@ export function createHttpServer(options: HttpServerOptions): Express {
         });
       }
 
+      // Validate scenario exists
+      if (!scenarioEngine.registry.has(scenarioId)) {
+        return res.status(400).json({
+          error: "ValidationError",
+          message: `Unknown scenarioId: ${scenarioId}`,
+          availableScenarios: scenarioEngine.registry.list().map(s => ({ id: s.id, label: s.label }))
+        });
+      }
+
       logger.info("create_run", "Creating new run", {
         scenarioId,
         profileId,
@@ -297,6 +320,154 @@ export function createHttpServer(options: HttpServerOptions): Express {
     } catch (error) {
       next(error);
     }
+  });
+
+  // ===== Browser Control Endpoints =====
+
+  /**
+   * POST /api/browser/sessions/:runId/create
+   * Create a new browser session for a run
+   */
+  app.post("/api/browser/sessions/:runId/create", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { runId } = req.params;
+
+      logger.info("create_browser_session", "Creating browser session", { runId });
+
+      const session = browserControlService.createSession(runId);
+
+      res.status(201).json({
+        session: {
+          runId: session.runId,
+          isActive: session.isActive,
+          lastActivity: session.lastActivity,
+          commandCount: session.commands.length,
+          resultCount: session.results.length
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/browser/sessions/:runId
+   * Get browser session details
+   */
+  app.get("/api/browser/sessions/:runId", (req: Request, res: Response) => {
+    const { runId } = req.params;
+
+    const session = browserControlService.getSession(runId);
+
+    if (!session) {
+      return res.status(404).json({
+        error: "NotFound",
+        message: `Browser session not found for run ${runId}`
+      });
+    }
+
+    res.status(200).json({
+      session: {
+        runId: session.runId,
+        isActive: session.isActive,
+        commands: session.commands,
+        commandCount: session.commands.length,
+        resultCount: session.results.length,
+        lastActivity: session.lastActivity,
+        pageAvailable: !!session.page
+      },
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  /**
+   * GET /api/browser/sessions
+   * List all active browser sessions
+   */
+  app.get("/api/browser/sessions", (req: Request, res: Response) => {
+    const sessions = browserControlService.listSessions();
+
+    res.status(200).json({
+      sessions: sessions.map(s => ({
+        runId: s.runId,
+        isActive: s.isActive,
+        commandCount: s.commands.length,
+        resultCount: s.results.length,
+        lastActivity: s.lastActivity,
+        pageAvailable: !!s.page
+      })),
+      count: sessions.length,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  /**
+   * POST /api/browser/sessions/:runId/command
+   * Execute a command in a browser session
+   * Body: { type, ... } - BrowserCommand
+   */
+  app.post("/api/browser/sessions/:runId/command", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { runId } = req.params;
+      const command = req.body;
+
+      if (!command.type) {
+        return res.status(400).json({
+          error: "ValidationError",
+          message: "Command type is required"
+        });
+      }
+
+      logger.debug("execute_browser_command", "Executing browser command", { runId, commandType: command.type });
+
+      const result = await browserControlService.executeCommand(runId, command);
+
+      res.status(result.success ? 200 : 400).json({
+        result,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/browser/sessions/:runId/history
+   * Get command history for a session
+   * Query params: limit
+   */
+  app.get("/api/browser/sessions/:runId/history", (req: Request, res: Response) => {
+    const { runId } = req.params;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+
+    const history = browserControlService.getSessionHistory(runId);
+    const limited = history.slice(-limit);
+
+    res.status(200).json({
+      history: limited,
+      count: limited.length,
+      total: history.length,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  /**
+   * POST /api/browser/sessions/:runId/end
+   * End a browser session
+   */
+  app.post("/api/browser/sessions/:runId/end", (req: Request, res: Response) => {
+    const { runId } = req.params;
+
+    logger.info("end_browser_session", "Ending browser session", { runId });
+
+    browserControlService.endSession(runId);
+
+    res.status(200).json({
+      message: "Browser session ended",
+      runId,
+      timestamp: new Date().toISOString()
+    });
   });
 
   // ===== Artifacts Endpoints =====
