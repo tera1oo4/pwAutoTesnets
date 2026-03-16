@@ -43,18 +43,6 @@ export type ProfileLockState = {
   updatedAt: ISODateString;
 };
 
-export type TestRun = {
-  id: RunId;
-  networkId: NetworkId;
-  profileId: ProfileId;
-  status: RunStatus;
-  startedAt: ISODateString;
-  finishedAt?: ISODateString;
-  errorMessage?: string;
-  createdAt: ISODateString;
-  updatedAt: ISODateString;
-};
-
 export type BrowserSession = {
   id: ID;
   profileId: ProfileId;
@@ -77,18 +65,24 @@ export type LocatorHandle = {
   isVisible(options?: { timeout?: number }): Promise<boolean>;
   click(options?: { timeout?: number }): Promise<void>;
   fill(value: string, options?: { timeout?: number }): Promise<void>;
+  textContent(): Promise<string | null>;
+  all(): Promise<LocatorHandle[]>;
+  first(): LocatorHandle;
 };
 
 export type PageHandle = {
   locator(selector: string): LocatorHandle;
   waitForTimeout(ms: number): Promise<void>;
-  evaluate<T>(pageFunction: () => T | Promise<T>): Promise<T>;
+  evaluate<T>(pageFunction: (arg?: any) => T | Promise<T>, arg?: any): Promise<T>;
+  goto(url: string, options?: { timeout?: number; waitUntil?: string }): Promise<void>;
   screenshot(options?: { path?: string }): Promise<Buffer>;
   content(): Promise<string>;
   startTracing(): Promise<void>;
   stopTracing(path: string): Promise<void>;
   getConsoleLogs(): string[];
   getNetworkLogs(): string[];
+  close(): Promise<void>;
+  isTracingActive(): boolean;
 };
 
 export const LogLevel = {
@@ -123,10 +117,22 @@ export const WalletKind = {
 
 export type WalletKind = (typeof WalletKind)[keyof typeof WalletKind];
 
+export type WalletDetectionRule = {
+  name: string;
+  signal: string;
+  confidence: number;
+};
+
 export type WalletDetection = {
   kind: WalletKind;
   confidence: number;
   reason?: string;
+  matchedRule?: WalletDetectionRule;
+  metadata?: {
+    detectedSignals?: string[];
+    selectors?: { name: string; versions: number[] }[];
+    unknownStateReason?: string;
+  };
 };
 
 export type WalletContext = {
@@ -138,12 +144,33 @@ export type WalletConnectionRequest = {
   chainId: number;
 };
 
+export type TransactionConfirmRequest = {
+  method: "eth_sendTransaction" | "eth_sign" | "personal_sign" | "eth_signTypedData_v4";
+};
+
+export type SignMessageRequest = {
+  message: string;
+};
+
+export type SignTypedDataRequest = {
+  domain?: { name?: string; version?: string; chainId?: number };
+  types?: Record<string, any>;
+  primaryType?: string;
+  message?: Record<string, any>;
+};
+
 export type WalletController = {
   kind: WalletKind;
   detect(page: PageHandle, context: WalletContext): Promise<WalletDetection | null>;
   unlock(page: PageHandle, password: string, context: WalletContext): Promise<void>;
   connect(page: PageHandle, context: WalletContext): Promise<void>;
   ensureNetwork(page: PageHandle, request: WalletConnectionRequest, context: WalletContext): Promise<void>;
+  signMessage(page: PageHandle, request: SignMessageRequest, context: WalletContext): Promise<void>;
+  signTypedData(page: PageHandle, request: SignTypedDataRequest, context: WalletContext): Promise<void>;
+  confirmTransaction(page: PageHandle, request: TransactionConfirmRequest, context: WalletContext): Promise<void>;
+  approve(page: PageHandle, context: WalletContext): Promise<void>;
+  reject(page: PageHandle, context: WalletContext): Promise<void>;
+  handlePopupAuto(page: PageHandle, context: WalletContext): Promise<void>;
 };
 
 export type ScenarioId = ID;
@@ -156,12 +183,35 @@ export type ScenarioRun = {
   attempt: number;
 };
 
+export type ScenarioExecutionOptions = {
+  dappUrl?: string;
+  maxRetries?: number;
+  timeoutMs?: number;
+};
+
 export type ScenarioContext = {
   logger: Logger;
   page: PageHandle;
   run: ScenarioRun;
   artifacts: ArtifactWriter;
-  abortSignal?: AbortSignal; // Added task cancellation support
+  abortSignal?: AbortSignal;
+  wallet?: WalletManager;
+  walletKind?: WalletKind;
+  options?: ScenarioExecutionOptions;
+};
+
+// WalletManager forward reference (imported at runtime)
+export type WalletManager = {
+  detect(page: PageHandle): Promise<WalletDetection | null>;
+  unlock(page: PageHandle, password: string): Promise<void>;
+  connect(page: PageHandle): Promise<void>;
+  ensureNetwork(page: PageHandle, request: WalletConnectionRequest): Promise<void>;
+  signMessage(page: PageHandle, request: SignMessageRequest): Promise<void>;
+  signTypedData(page: PageHandle, request: SignTypedDataRequest): Promise<void>;
+  confirmTransaction(page: PageHandle, request: TransactionConfirmRequest): Promise<void>;
+  approve(page: PageHandle): Promise<void>;
+  reject(page: PageHandle): Promise<void>;
+  handlePopupAuto(page: PageHandle): Promise<void>;
 };
 
 export type Scenario = {
@@ -200,6 +250,9 @@ export type Queue<T> = {
 export type RedisQueueClient = {
   lpush(key: string, value: string): Promise<number>;
   rpop(key: string): Promise<string | null>;
+  zadd(key: string, score: number, member: string): Promise<number>;
+  zrangebyscore(key: string, min: string | number, max: string | number, ...args: string[]): Promise<string[]>;
+  zrem(key: string, ...members: string[]): Promise<number>;
 };
 
 export type RunQueuePayload = {
@@ -259,6 +312,7 @@ export type RunStore = {
   getRun(runId: RunId): Promise<RunRecord | null>;
   listPendingRuns(limit: number, now?: ISODateString): Promise<RunRecord[]>;
   listRuns(options?: { status?: RunStatus; limit?: number }): Promise<RunRecord[]>;
+  listRecentlyUpdatedRuns(since: ISODateString, limit: number): Promise<RunRecord[]>;
   createRun(run: RunRecord): Promise<void>;
   markRunning(runId: RunId): Promise<void>;
   markQueued(
@@ -277,5 +331,6 @@ export type RunStore = {
 
 export type PageFactory = {
   create(profileId: ProfileId): Promise<PageHandle>;
-  close(page: PageHandle): Promise<void>;
+  getExtensionPage?(profileId: ProfileId): Promise<PageHandle | null>;
+  close(profileId: ProfileId): Promise<void>;
 };

@@ -135,7 +135,10 @@ export class ProfileLock {
     }
     const expiresAt = new Date(state.expiresAt).getTime();
     if (Number.isNaN(expiresAt) || expiresAt <= Date.now()) {
-      await fs.unlink(lockPath).catch(() => {});
+      await fs.unlink(lockPath).catch((error) => {
+        // May have been removed concurrently
+        if ((error as any).code !== 'ENOENT') throw error;
+      });
       return true;
     }
     // Check if the holding process is still alive locally
@@ -145,7 +148,9 @@ export class ProfileLock {
       } catch (e: any) {
         if (e.code === "ESRCH") {
           // Process does not exist, lock is stale
-          await fs.unlink(lockPath).catch(() => {});
+          await fs.unlink(lockPath).catch((error) => {
+            if ((error as any).code !== 'ENOENT') throw error;
+          });
           return true;
         }
       }

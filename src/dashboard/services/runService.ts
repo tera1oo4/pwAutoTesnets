@@ -1,32 +1,60 @@
-import type { RunRecord, RunStatus } from "../../shared/types.ts";
+import type { RunRecord } from "../../shared/types.ts";
+import { DashboardApiClient, type RunsQuery } from "../client/apiClient.ts";
 
-export type RunsQuery = {
-  status?: RunStatus;
-  limit?: number;
-};
-
-export type DashboardApi = {
-  listRuns(query?: RunsQuery): Promise<RunRecord[]>;
-  getRun(id: string): Promise<RunRecord | null>;
-  cancelRun(id: string): Promise<RunRecord | null>;
-};
-
+/**
+ * DashboardRunService - Business logic for dashboard
+ * Wraps API client with type-safe methods
+ */
 export class DashboardRunService {
-  private readonly api: DashboardApi;
+  private readonly client: DashboardApiClient;
 
-  constructor(api: DashboardApi) {
-    this.api = api;
+  constructor(client: DashboardApiClient) {
+    this.client = client;
   }
 
+  /**
+   * List runs with optional filtering
+   */
   async listRuns(query?: RunsQuery): Promise<RunRecord[]> {
-    return this.api.listRuns(query);
+    const response = await this.client.listRuns(query);
+    return response.runs;
   }
 
+  /**
+   * Get specific run by ID
+   */
   async getRun(id: string): Promise<RunRecord | null> {
-    return this.api.getRun(id);
+    const response = await this.client.getRun(id);
+    return response?.run ?? null;
   }
 
+  /**
+   * Cancel a run
+   */
   async cancelRun(id: string): Promise<RunRecord | null> {
-    return this.api.cancelRun(id);
+    const response = await this.client.cancelRun(id);
+    return response?.run ?? null;
+  }
+
+  /**
+   * Get run count by status
+   */
+  async getRunCountByStatus() {
+    const runs = await this.listRuns({ limit: 1000 });
+
+    const counts = {
+      queued: 0,
+      running: 0,
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+      needs_review: 0
+    };
+
+    for (const run of runs) {
+      counts[run.status]++;
+    }
+
+    return counts;
   }
 }

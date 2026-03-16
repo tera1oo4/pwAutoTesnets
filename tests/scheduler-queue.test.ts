@@ -37,6 +37,13 @@ class InMemoryRunStore implements RunRepository {
     return list.slice(0, options?.limit ?? list.length);
   }
 
+  async listRecentlyUpdatedRuns(since: string, limit: number): Promise<RunRecord[]> {
+    return Array.from(this.runs.values())
+      .filter((run) => new Date(run.updatedAt) >= new Date(since))
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, limit);
+  }
+
   async createRun(run: RunRecord): Promise<void> {
     this.runs.set(run.id, run);
   }

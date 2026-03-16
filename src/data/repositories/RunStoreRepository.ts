@@ -20,6 +20,10 @@ export class RunStoreRepository implements RunRepository {
     return this.store.listRuns(options);
   }
 
+  listRecentlyUpdatedRuns(since: string, limit: number) {
+    return this.store.listRecentlyUpdatedRuns(since, limit);
+  }
+
   createRun(run: Parameters<RunStore["createRun"]>[0]) {
     return this.store.createRun(run);
   }

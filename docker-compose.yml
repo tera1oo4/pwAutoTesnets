@@ -1,35 +1,97 @@
-
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: pw-autotestnets-app
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
+  postgres:
+    image: postgres:15-alpine
+    container_name: pw-postgres
     environment:
-      - NODE_ENV=development
-      - REDIS_URL=redis://redis:6379
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: playwrightautomation
+    ports:
+      - "5432:5432"
     volumes:
-      - .:/app
-      - /app/node_modules
-    depends_on:
-      - redis
-    # Playwright requires a larger shared memory size to avoid crashes
-    shm_size: '2gb'
-    # Optional: Enable defining custom seccomp profile or IPC for better browser isolation if needed
-    # ipc: host
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d playwrightautomation"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pw-network
 
   redis:
     image: redis:7-alpine
-    container_name: pw-autotestnets-redis
+    container_name: pw-redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pw-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pw-api
+    environment:
+      NODE_ENV: production
+      APP_PORT: 3000
+      APP_BASE_URL: http://localhost:3000
+      APP_LOG_LEVEL: info
+      DATABASE_URL: postgresql://user:password@postgres:5432/playwrightautomation
+      REDIS_URL: redis://redis:6379
+      ARTIFACTS_PATH: ./artifacts
+      HEADLESS: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pw-network
+    command: npm run dev
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pw-worker
+    environment:
+      NODE_ENV: production
+      APP_LOG_LEVEL: info
+      DATABASE_URL: postgresql://user:password@postgres:5432/playwrightautomation
+      REDIS_URL: redis://redis:6379
+      ARTIFACTS_PATH: ./artifacts
+      HEADLESS: "true"
+    volumes:
+      - ./artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pw-network
+    command: npm run worker
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
 
 volumes:
+  postgres_data:
   redis_data:
+
+networks:
+  pw-network:
+    driver: bridge

@@ -11,6 +11,7 @@ export type RunRepository = {
   getRun(runId: RunId): Promise<RunRecord | null>;
   listPendingRuns(limit: number, now?: ISODateString): Promise<RunRecord[]>;
   listRuns(options?: { status?: RunStatus; limit?: number }): Promise<RunRecord[]>;
+  listRecentlyUpdatedRuns(since: ISODateString, limit: number): Promise<RunRecord[]>;
   createRun(run: RunRecord): Promise<void>;
   markRunning(runId: RunId): Promise<void>;
   markQueued(

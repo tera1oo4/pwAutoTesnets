@@ -17,6 +17,7 @@ export class WalletDetector {
     });
     const timeoutMs = this.context.timeoutMs ?? WALLET_DETECTION_TIMEOUT_MS;
     let best: WalletDetection | null = null;
+    const detectionResults: Array<{ kind: string; result: WalletDetection | null; error?: string }> = [];
 
     for (const controller of this.controllers) {
       try {
@@ -24,13 +25,16 @@ export class WalletDetector {
           controller.detect(page, this.context),
           timeoutMs
         );
+        detectionResults.push({ kind: controller.kind, result: detection });
         if (detection && (!best || detection.confidence > best.confidence)) {
           best = detection;
         }
       } catch (error) {
+        const errorMsg = String(error);
+        detectionResults.push({ kind: controller.kind, result: null, error: errorMsg });
         this.context.logger.warn(WALLET_LOG_EVENTS.detectFailure, "wallet detector controller error", {
           kind: controller.kind,
-          error: String(error)
+          error: errorMsg
         });
       }
     }
@@ -38,12 +42,16 @@ export class WalletDetector {
     if (best) {
       this.context.logger.info(WALLET_LOG_EVENTS.detectSuccess, "wallet detector success", {
         kind: best.kind,
-        confidence: best.confidence
+        confidence: best.confidence,
+        reason: best.reason,
+        matchedRule: best.matchedRule
       });
       return best;
     }
 
-    this.context.logger.warn(WALLET_LOG_EVENTS.detectFailure, "wallet detector empty", {});
+    this.context.logger.warn(WALLET_LOG_EVENTS.detectFailure, "wallet detector empty", {
+      attempts: detectionResults
+    });
     throw new NeedsReviewError("WalletUnknownState", "wallet_unknown_state");
   }
 

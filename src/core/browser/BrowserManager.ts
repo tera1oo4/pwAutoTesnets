@@ -75,7 +75,10 @@ export class BrowserManager {
       return;
     }
     const timer = setInterval(() => {
-      this.lock.refresh(profileId).catch(() => {});
+      this.lock.refresh(profileId).catch((error) => {
+        // Lock refresh failure - heartbeat stopped, lock will expire naturally
+        // Next acquire will clean up and retry
+      });
     }, this.lockHeartbeatMs);
     this.lockHeartbeats.set(profileId, timer);
   }

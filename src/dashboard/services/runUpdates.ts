@@ -1,78 +1,69 @@
-import type { RunRecord, RunStatus } from "../../shared/types.ts";
-import type { DashboardApi } from "./runService.ts";
+import type { RunRecord } from "../../shared/types.ts";
+import type { ApiUpdatesResponse } from "../client/apiClient.ts";
+import { DashboardApiClient } from "../client/apiClient.ts";
 
-type RunUpdatesOptions = {
-  intervalMs?: number;
-  status?: RunStatus;
-  limit?: number;
-};
-
+/**
+ * RunUpdatesPoller - Polls for run updates
+ * Provides both polling and optional SSE fallback
+ */
 export class RunUpdatesPoller {
-  private readonly api: DashboardApi;
+  private readonly client: DashboardApiClient;
   private readonly intervalMs: number;
-  private readonly status?: RunStatus;
-  private readonly limit?: number;
-  private timer?: ReturnType<typeof setInterval>;
-  private eventSource?: EventSource;
+  private timer?: NodeJS.Timeout;
   private running = false;
+  private lastUpdate: Date;
 
-  constructor(api: DashboardApi, options: RunUpdatesOptions = {}) {
-    this.api = api;
-    this.intervalMs = options.intervalMs ?? 2000;
-    this.status = options.status;
-    this.limit = options.limit;
+  constructor(client: DashboardApiClient, intervalMs: number = 5000) {
+    this.client = client;
+    this.intervalMs = intervalMs;
+    this.lastUpdate = new Date(Date.now() - 60000); // Start from 1 minute ago
   }
 
-  start(handler: (runs: RunRecord[]) => void) {
-    if (this.running) {
-      return;
-    }
+  /**
+   * Start polling for updates
+   */
+  start(onUpdate: (runs: RunRecord[]) => void, onError?: (error: Error) => void): void {
+    if (this.running) return;
+
     this.running = true;
+    const poll = async () => {
+      try {
+        if (!this.running) return;
 
-    try {
-      const url = new URL("/api/runs/stream", window.location.origin);
-      if (this.status) url.searchParams.set("status", this.status);
-      if (this.limit) url.searchParams.set("limit", String(this.limit));
-
-      this.eventSource = new EventSource(url.toString());
-      this.eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.runs) handler(data.runs);
-        } catch { }
-      };
-      this.eventSource.onerror = () => {
-        this.eventSource?.close();
-        this.eventSource = undefined;
-        this.startPolling(handler);
-      };
-    } catch {
-      this.startPolling(handler);
-    }
-  }
-
-  private startPolling(handler: (runs: RunRecord[]) => void) {
-    if (this.timer || !this.running) return;
-    const tick = async () => {
-      if (!this.running) return;
-      const runs = await this.api.listRuns({ status: this.status, limit: this.limit });
-      handler(runs);
+        const response = await this.client.getUpdates(this.lastUpdate, 50);
+        if (response.updates.length > 0) {
+          onUpdate(response.updates);
+          this.lastUpdate = new Date();
+        }
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error(String(error)));
+      }
     };
+
+    // Poll immediately first
+    void poll();
+
+    // Then set up interval
     this.timer = setInterval(() => {
-      void tick();
+      void poll();
     }, this.intervalMs);
-    void tick();
   }
 
-  stop() {
+  /**
+   * Stop polling
+   */
+  stop(): void {
     this.running = false;
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = undefined;
-    }
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = undefined;
     }
+  }
+
+  /**
+   * Check if currently polling
+   */
+  isRunning(): boolean {
+    return this.running;
   }
 }

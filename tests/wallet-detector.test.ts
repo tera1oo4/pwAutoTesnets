@@ -26,19 +26,35 @@ const createController = (
   },
   unlock: async () => { },
   connect: async () => { },
-  ensureNetwork: async () => { }
+  ensureNetwork: async () => { },
+  signMessage: async () => { },
+  signTypedData: async () => { },
+  confirmTransaction: async () => { },
+  approve: async () => { },
+  reject: async () => { },
+  handlePopupAuto: async () => { }
 });
 
 const createPage = (): PageHandle => ({
-  locator: () => ({ isVisible: async () => true, click: async () => { }, fill: async () => { } }),
+  locator: () => ({
+    isVisible: async () => true,
+    click: async () => { },
+    fill: async () => { },
+    textContent: async () => "",
+    all: async () => [],
+    first: () => ({ isVisible: async () => true, click: async () => { }, fill: async () => { }, textContent: async () => "", all: async () => [], first: () => ({} as any) } as any)
+  } as any),
   waitForTimeout: async () => { },
   evaluate: async <T>() => undefined as T,
+  goto: async () => { },
   screenshot: async () => Buffer.from(""),
   content: async () => "",
   startTracing: async () => { },
   stopTracing: async () => { },
   getConsoleLogs: () => [],
-  getNetworkLogs: () => []
+  getNetworkLogs: () => [],
+  close: async () => { },
+  isTracingActive: () => false
 });
 
 test("WalletDetector returns best detection", async () => {
